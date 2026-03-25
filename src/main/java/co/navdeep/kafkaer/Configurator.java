@@ -62,10 +62,11 @@ public class Configurator {
     public void wipeTopics(boolean confirmDelete, boolean wipeSchema) throws ExecutionException, InterruptedException {
         logger.debug("Deleting topics");
         DeleteTopicsResult result = adminClient.deleteTopics(config.getAllTopicNames());
-        for(String topic : result.values().keySet()){
+        Map<String, KafkaFuture<Void>> topicFutures = result.topicNameValues();
+        for(String topic : topicFutures.keySet()){
             try {
                 logger.debug("Deleting topic: {}", topic);
-                result.values().get(topic).get();
+                topicFutures.get(topic).get();
                 if(confirmDelete) waitForDelete(topic);
             } catch(ExecutionException e){
                 if(e.getCause() instanceof UnknownTopicOrPartitionException){
@@ -109,7 +110,7 @@ public class Configurator {
         while(tries < maxTries){
             DescribeTopicsResult result = adminClient.describeTopics(Collections.singletonList(topicName));
             try{
-                result.values().get(topicName).get();
+                result.allTopicNames().get().get(topicName);
             } catch(Exception e){
                 if(e.getCause() instanceof UnknownTopicOrPartitionException){
                     logger.debug("Confirmed: topic [{}] was deleted.", topicName);
@@ -157,9 +158,10 @@ public class Configurator {
         }
 
         CreateAclsResult result = adminClient.createAcls(bindings);
-        for(AclBinding binding : result.values().keySet()){
+        Map<AclBinding, KafkaFuture<Void>> aclFutures = result.values();
+        for(AclBinding binding : aclFutures.keySet()){
             logger.debug("Creating ACL {}", binding);
-            result.values().get(binding).get();
+            aclFutures.get(binding).get();
         }
     }
 
@@ -170,21 +172,25 @@ public class Configurator {
             return;
         }
 
-        Map<ConfigResource, org.apache.kafka.clients.admin.Config> updateConfig = new HashMap<>();
+        Map<ConfigResource, Collection<AlterConfigOp>> updateConfig = new HashMap<>();
         for(Broker broker : config.getBrokers()){
             logger.debug("Applying broker config {}", broker);
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, broker.getId());
-            updateConfig.put(configResource, broker.configsAsKafkaConfig());
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            for(ConfigEntry entry : broker.configsAsKafkaConfig().entries()){
+                ops.add(new AlterConfigOp(entry, AlterConfigOp.OpType.SET));
+            }
+            updateConfig.put(configResource, ops);
         }
 
-        AlterConfigsResult result = adminClient.alterConfigs(updateConfig);
+        AlterConfigsResult result = adminClient.incrementalAlterConfigs(updateConfig);
         result.all().get();
 
     }
 
     public void configureTopics() throws ExecutionException, InterruptedException {
         logger.debug("Configuring topics");
-        Map<String, KafkaFuture<TopicDescription>> topicResults = adminClient.describeTopics(config.getAllTopicNames()).values();
+        Map<String, KafkaFuture<TopicDescription>> topicResults = adminClient.describeTopics(config.getAllTopicNames()).topicNameValues();
         for(Topic topic : config.getTopics()){
             logger.debug("Topic config: {}", topic);
             try {
@@ -207,9 +213,13 @@ public class Configurator {
     private void handleTopicConfigUpdate(Topic topic) throws InterruptedException {
         if(!topic.hasConfigs()) return;
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topic.getName());
-        Map<ConfigResource, org.apache.kafka.clients.admin.Config> updateConfig = new HashMap<>();
-        updateConfig.put(configResource, topic.configsAsKafkaConfig());
-        AlterConfigsResult alterConfigsResult = adminClient.alterConfigs(updateConfig);
+        Map<ConfigResource, Collection<AlterConfigOp>> updateConfig = new HashMap<>();
+        Collection<AlterConfigOp> ops = new ArrayList<>();
+        for(ConfigEntry entry : topic.configsAsKafkaConfig().entries()){
+            ops.add(new AlterConfigOp(entry, AlterConfigOp.OpType.SET));
+        }
+        updateConfig.put(configResource, ops);
+        AlterConfigsResult alterConfigsResult = adminClient.incrementalAlterConfigs(updateConfig);
         try {
             alterConfigsResult.all().get();
         } catch (ExecutionException e) {

@@ -399,7 +399,7 @@ public class ConfiguratorTest {
 
     private void compareWithKafkaTopic(Topic topic) throws ExecutionException, InterruptedException {
         DescribeTopicsResult result = adminClient.describeTopics(Collections.singletonList(topic.getName()));
-        TopicDescription kafkaTopic = result.all().get().get(topic.getName());
+        TopicDescription kafkaTopic = result.allTopicNames().get().get(topic.getName());
         Assert.assertNotNull(kafkaTopic);
         Assert.assertEquals(kafkaTopic.partitions().size(), topic.getPartitions());
         Assert.assertEquals(kafkaTopic.partitions().get(0).replicas().size(), topic.getReplicationFactor());

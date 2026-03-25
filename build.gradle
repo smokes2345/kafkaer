@@ -5,7 +5,7 @@ plugins {
 }
 
 group 'co.navdeep'
-version '2.0.0'
+version '2.0.1'
 archivesBaseName = "kafkaer"
 
 sourceCompatibility = 1.8
@@ -26,8 +26,8 @@ dependencies {
     implementation "org.slf4j:slf4j-simple:1.7.30"
     implementation "io.confluent:kafka-schema-registry-client:8.2.0"
 
-    compileOnly "org.projectlombok:lombok:1.18.20"
-    annotationProcessor "org.projectlombok:lombok:1.18.20"
+    compileOnly "org.projectlombok:lombok:1.18.30"
+    annotationProcessor "org.projectlombok:lombok:1.18.30"
 
     testImplementation "junit:junit:4.12"
     testImplementation "org.mockito:mockito-core:3.4.0"
@@ -44,12 +44,12 @@ task execJar(type: Jar) {
 }
 
 task javadocJar(type: Jar) {
-    classifier = 'javadoc'
+    archiveClassifier = 'javadoc'
     from javadoc
 }
 
 task sourcesJar(type: Jar) {
-    classifier = 'sources'
+    archiveClassifier = 'sources'
     from sourceSets.main.allSource
 }
 
